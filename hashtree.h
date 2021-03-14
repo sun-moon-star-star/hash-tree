@@ -27,11 +27,8 @@ private:
         node(uint64_t hashcode) : node(hashcode, nullptr) {}
         node() : node(0llu, nullptr) {}
 
-        // 1 means itself need copy
-        // 2 means children need copy
-        // 4 means brother need copy
-        // 8 means is leaf, means no children, redundant elements link after
-        // 16 means children is array
+        // 1 means is leaf, means no children, redundant elements link after
+        // 2 means children is array
         uint8_t type;
 
         uint8_t slot;    // hashcode % father base unless root
@@ -46,7 +43,7 @@ private:
     } __attribute__((packed));
 
 public:
-    hashtree(uint32_t level1) : _level1(level1), size(0llu), _head(nullptr) {}
+    hashtree(uint32_t level1) : _level1(level1), _size(0llu), _head(nullptr) {}
 
     hashtree(const hashtree&);
 
@@ -82,7 +79,7 @@ public:
 
 private:
     static const uint8_t _prime[7];
-    const uint32_t _level1;  // 质数
+    uint32_t _level1;  // 质数
 
     uint64_t _size;
     std::shared_ptr<node> _head;
@@ -92,24 +89,53 @@ template <typename T>
 const uint8_t hashtree<T>::_prime[7] = {23, 19, 17, 13, 11, 7, 5};
 
 template <typename T>
-hashtree<T>::hashtree(const hashtree<T>&) {}
+hashtree<T>::hashtree(const hashtree<T>& other) {
+    _size = other._size;
+    _level1 = other._level1;
+    _head = other._head;
+}
 
 template <typename T>
-hashtree<T>::hashtree(hashtree<T>&&) {}
+hashtree<T>::hashtree(hashtree<T>&& other) {
+    _size = other._size;
+    _level1 = other._level1;
+    _head = other._head;
+
+    other._size = 0llu;
+    other._level1 = 0llu;
+    other._head = nullptr;
+}
 
 template <typename T>
-hashtree<T>& hashtree<T>::operator=(const hashtree<T>&) {}
+hashtree<T>& hashtree<T>::operator=(const hashtree<T>& other) {
+    _size = other._size;
+    _level1 = other._level1;
+    _head = other._head;
+}
 
 template <typename T>
-hashtree<T>& hashtree<T>::operator=(hashtree<T>&&) {}
+hashtree<T>& hashtree<T>::operator=(hashtree<T>&& other) {
+    _size = other._size;
+    _level1 = other._level1;
+    _head = other._head;
+
+    other._size = 0llu;
+    other._level1 = 0llu;
+    other._head = nullptr;
+}
 
 template <typename T>
 void hashtree<T>::clear() noexcept {
+    _size = 0llu;
     _head = nullptr;
 }
 
 template <typename T>
-void hashtree<T>::swap(hashtree<T>&) {}
+void hashtree<T>::swap(hashtree<T>& other) {
+    hashtree<T> tmp = other;
+    x = other;
+    other = tmp;
+}
 
 template <typename T>
 uint64_t hashtree<T>::size() const noexcept {
