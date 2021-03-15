@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 static const uint8_t hashtree_max_level = 9;
 static const uint8_t hashtree_prime[hashtree_max_level - 1] = {29, 23, 19, 17,
@@ -52,7 +53,7 @@ public:
         _head.resize(_level1);
     }
 
-    hashtree(uin32_t level1) : hashtree(31) {}
+    hashtree() : hashtree(31) {}
 
     // todo(copy on write)
     hashtree(const hashtree&) = delete;
@@ -139,11 +140,11 @@ uint64_t hashtree<T>::size() const noexcept {
 
 template <typename T>
 int hashtree<T>::fixup_children(std::shared_ptr<node> p, uint8_t level) {
-    if (p.size() == level) {
+    if (p->children.size() == 1llu * level) {
         return 0;
-    } else if (p.size() > level) {
+    } else if (p->children.size() > 1llu * level) {
         return -1;
-    } else if ((level + 1) < p.size() * 2) {
+    } else if ((level + 1llu) < p->children.size() * 2) {
         return 0;
     }
 
@@ -233,7 +234,7 @@ int hashtree<T>::insert(uint64_t hashcode, std::shared_ptr<T> data) {
 
             if (!found) {
                 cur->children.push_back(std::make_shared<node>(hashcode, data));
-                fixup_children(cur);
+                fixup_children(cur, hashslots);
             }
         } else {
             if (cur->children[slot] == nullptr) {
@@ -274,43 +275,49 @@ std::shared_ptr<T> hashtree<T>::erase(uint64_t hashcode) {
     std::shared_ptr<node> cur = _head[slot];
     std::shared_ptr<T> res;
 
-    uint8_t level = 1;
-    for (; level < hashtree_max_level; ++level) {
-        uint8_t hashslots = hashtree_prime[level - 1];
-        slot = hashcode % hashslots;
+    uint8_t level = 0;
 
-        if (cur->children.size() != hashslots) {
-            bool found = false;
+    if (cur->hashcode == hashcode) {
+        res = cur->data;
+    } else {
+        level = 1;
+        for (; level < hashtree_max_level; ++level) {
+            uint8_t hashslots = hashtree_prime[level - 1];
+            slot = hashcode % hashslots;
 
-            for (auto& it : cur->children) {
-                if (it->hashcode % hashslots == slot) {
-                    found = true;
-                    if (it->hashcode == hashcode) {
-                        res = it->data;
+            if (cur->children.size() != hashslots) {
+                bool found = false;
+
+                for (auto& it : cur->children) {
+                    if (it->hashcode % hashslots == slot) {
+                        found = true;
+                        if (it->hashcode == hashcode) {
+                            res = it->data;
+                        }
+                        last = cur;
+                        cur = it;
+                        break;
                     }
-                    last = cur;
-                    cur = it;
-                    break;
                 }
-            }
 
-            if (!found) {
-                return nullptr;
-            }
-        } else {
-            if (cur->children[slot] == nullptr) {
-                return nullptr;
+                if (!found) {
+                    return nullptr;
+                }
             } else {
-                last = cur;
-                cur = cur->children[slot];
-                if (cur->hashcode == hashcode) {
-                    res = it->data;
+                if (cur->children[slot] == nullptr) {
+                    return nullptr;
+                } else {
+                    last = cur;
+                    cur = cur->children[slot];
+                    if (cur->hashcode == hashcode) {
+                        res = cur->data;
+                    }
                 }
             }
-        }
 
-        if (res != nullptr) {
-            break;
+            if (res != nullptr) {
+                break;
+            }
         }
     }
 
@@ -318,13 +325,14 @@ std::shared_ptr<T> hashtree<T>::erase(uint64_t hashcode) {
         for (auto& it : cur->children) {
             if (it->hashcode == hashcode) {
                 res = it->data;
-                cur->children.erase(it);
+                it = cur->children.back();
+                cur->children.pop_back();
                 break;
             }
         }
     } else {
         while (++level < hashtree_max_level && cur->children.size() > 0) {
-            cur->data = cur->children[0].data;
+            cur->data = cur->children[0]->data;
             last = cur;
             cur = cur->children[0];
         }
@@ -332,19 +340,22 @@ std::shared_ptr<T> hashtree<T>::erase(uint64_t hashcode) {
         cur->data = nullptr;
         if (level == hashtree_max_level) {
             for (auto& it : last->children) {
-                if (cur->data == nullptr) {
-                    last->children.erase(cur);
+                if (it->data == nullptr) {
+                    it = last->children.back();
+                    last->children.pop_back();
                 }
             }
-        } else if (last->children.size() != hashtree_prime[level]) {
+        } else if (last && last->children.size() != hashtree_prime[level]) {
             for (auto& it : last->children) {
-                if (cur->data == nullptr) {
-                    last->children.erase(cur);
+                if (it->data == nullptr) {
+                    it = last->children.back();
+                    last->children.pop_back();
                 }
             }
         }
     }
 
+    --_size;
     return res;
 }
 
